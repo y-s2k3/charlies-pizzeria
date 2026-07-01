@@ -46,12 +46,323 @@ document.addEventListener('DOMContentLoaded', function() {
         return JSON.parse(localStorage.getItem('staffData'));
     }
     
-    // Function to show analytics modal with charts 
+    // ============================================
+    // TOPPINGS MANAGEMENT
+    // ============================================
+    
+    window.loadToppings = function() {
+        const data = initAppData();
+        if (!data.toppings) data.toppings = [];
+        
+        const container = document.getElementById('toppingsContainer');
+        if (!container) return;
+        
+        if (data.toppings.length === 0) {
+            container.innerHTML = '<p style="color: #999; grid-column: 1 / -1; text-align: center;">No toppings added yet. Add your first topping above!</p>';
+            return;
+        }
+        
+        let html = '';
+        data.toppings.forEach((topping, index) => {
+            html += `
+                <div style="background: #f8f9fa; padding: 0.8rem 1rem; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee;">
+                    <div>
+                        <span style="font-weight: 600;">${topping.name}</span>
+                        <span style="color: #E63946; font-weight: 600; margin-left: 0.5rem;">${formatPrice(topping.price)}</span>
+                    </div>
+                    <button onclick="removeTopping(${index})" style="background: #E63946; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-size: 1rem;">×</button>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+    
+    window.addTopping = function() {
+        const nameInput = document.getElementById('toppingName');
+        const priceInput = document.getElementById('toppingPrice');
+        
+        const name = nameInput?.value?.trim();
+        const price = parseFloat(priceInput?.value);
+        
+        if (!name) {
+            alert('Please enter a topping name.');
+            return;
+        }
+        if (!price || price <= 0) {
+            alert('Please enter a valid price.');
+            return;
+        }
+        
+        const data = initAppData();
+        if (!data.toppings) data.toppings = [];
+        
+        if (data.toppings.some(t => t.name.toLowerCase() === name.toLowerCase())) {
+            alert('This topping already exists.');
+            return;
+        }
+        
+        data.toppings.push({
+            id: Date.now(),
+            name: name,
+            price: price,
+            createdAt: new Date().toISOString()
+        });
+        
+        localStorage.setItem('charliesPizzeria', JSON.stringify(data));
+        
+        if (nameInput) nameInput.value = '';
+        if (priceInput) priceInput.value = '';
+        
+        loadToppings();
+        alert(`"${name}" added successfully!`);
+    }
+    
+    window.removeTopping = function(index) {
+        const data = initAppData();
+        if (!data.toppings) return;
+        
+        const topping = data.toppings[index];
+        if (!topping) return;
+        
+        if (confirm(`Remove "${topping.name}" from toppings?`)) {
+            data.toppings.splice(index, 1);
+            localStorage.setItem('charliesPizzeria', JSON.stringify(data));
+            loadToppings();
+        }
+    }
+    
+    // ============================================
+    // PRICE MANAGEMENT
+    // ============================================
+    
+    window.loadMenuItemsForAdmin = function() {
+        const data = initAppData();
+        const container = document.getElementById('menuItemsContainer');
+        if (!container) return;
+        
+        if (!data.menuItems || data.menuItems.length === 0) {
+            container.innerHTML = '<p style="color: #999; grid-column: 1 / -1; text-align: center;">No menu items.</p>';
+            return;
+        }
+        
+        let html = '';
+        data.menuItems.forEach(item => {
+            html += `
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 12px; border-left: 4px solid #E63946; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-weight: 600;">${item.name}</div>
+                        <div style="color: #E63946; font-weight: 600;">${formatPrice(item.price)}</div>
+                    </div>
+                    <button onclick="openPriceEditor(${item.id})" style="background: #2A9D8F; color: white; border: none; padding: 0.3rem 0.8rem; border-radius: 8px; cursor: pointer; font-size: 0.8rem;">
+                        <i class="fas fa-edit"></i> Change Price
+                    </button>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+    
+    window.openPriceEditor = function(itemId) {
+        const data = initAppData();
+        const item = data.menuItems.find(i => i.id == itemId);
+        if (!item) {
+            alert('Item not found.');
+            return;
+        }
+        
+        const newPrice = prompt(
+            `Change price for "${item.name}"\n\nCurrent Price: ${formatPrice(item.price)}\n\nEnter new price (£):`,
+            item.price
+        );
+        
+        if (newPrice === null) return;
+        
+        const price = parseFloat(newPrice);
+        if (isNaN(price) || price <= 0) {
+            alert('Please enter a valid price.');
+            return;
+        }
+        
+        item.price = price;
+        localStorage.setItem('charliesPizzeria', JSON.stringify(data));
+        loadMenuItemsForAdmin();
+        alert(`Price for "${item.name}" updated to ${formatPrice(price)}`);
+    }
+
+    // ============================================
+    // MODAL FUNCTION
+    // ============================================
+    
+    function showModal(options) {
+        const existingModal = document.querySelector('.modal-overlay');
+        if (existingModal) existingModal.remove();
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        `;
+        
+        modal.innerHTML = `
+            <div style="background: white; border-radius: 25px; padding: 2rem; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                ${options.type === 'confirm' ? '<i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: #E63946; margin-bottom: 1rem;"></i>' : '<i class="fas fa-users" style="font-size: 3rem; color: #E63946; margin-bottom: 1rem;"></i>'}
+                <h3 style="margin-bottom: 1rem;">${options.title}</h3>
+                <div style="color: #666; margin-bottom: 1.5rem;">${options.message}</div>
+                <div style="display: flex; gap: 1rem; justify-content: center;">
+                    ${options.showCancelButton ? '<button id="modalCancelBtn" style="background: #e0e0e0; color: #666; border: none; padding: 0.8rem 1.5rem; border-radius: 12px; cursor: pointer;">Cancel</button>' : ''}
+                    <button id="modalConfirmBtn" style="background: #E63946; color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 12px; cursor: pointer;">${options.confirmText || 'OK'}</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        document.getElementById('modalConfirmBtn').addEventListener('click', () => {
+            modal.remove();
+            if (options.onConfirm) options.onConfirm();
+        });
+        
+        if (options.showCancelButton) {
+            const cancelBtn = document.getElementById('modalCancelBtn');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    modal.remove();
+                    if (options.onCancel) options.onCancel();
+                });
+            }
+        }
+    }
+
+    // ============================================
+    // REPORTS MODAL
+    // ============================================
+    
+    function showReportsModal() {
+        const allOrders = getAllOrdersForRevenue();
+        const activeOrders = getAllOrders();
+        const users = initAppData().users;
+        const today = new Date().toDateString();
+        
+        const todayOrders = allOrders.filter(order => new Date(order.timestamp).toDateString() === today);
+        const todayRevenue = todayOrders.reduce((sum, order) => sum + order.total, 0);
+        const totalRevenue = allOrders.reduce((sum, order) => sum + order.total, 0);
+        const totalCustomers = users.filter(u => u.type === 'customer').length;
+        
+        const statusCounts = {
+            1: allOrders.filter(o => o.status === 1 && !o.isDeleted).length,
+            2: allOrders.filter(o => o.status === 2 && !o.isDeleted).length,
+            3: allOrders.filter(o => o.status === 3 && !o.isDeleted).length,
+            4: allOrders.filter(o => o.status === 4 && !o.isDeleted).length,
+            5: allOrders.filter(o => o.status === 5 && !o.isDeleted).length
+        };
+        
+        // Calculate popular items
+        const itemCounts = {};
+        allOrders.forEach(order => {
+            if (order.items) {
+                order.items.forEach(item => {
+                    const name = item.name;
+                    if (!itemCounts[name]) itemCounts[name] = 0;
+                    itemCounts[name] += item.quantity || 1;
+                });
+            }
+        });
+        
+        const popularItems = Object.entries(itemCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+        
+        const modal = document.createElement('div');
+        modal.className = 'reports-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+        `;
+        
+        modal.innerHTML = `
+            <div style="background: white; border-radius: 24px; padding: 2rem; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                <h2 style="color: #E63946; margin-bottom: 1rem;"><i class="fas fa-chart-line"></i> Sales Reports</h2>
+                
+                <div style="margin-bottom: 2rem; padding: 1rem; background: #F8F9FA; border-radius: 16px;">
+                    <h3>Summary</h3>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        <div style="text-align: center; padding: 0.8rem; background: white; border-radius: 12px;">
+                            <div style="font-size: 1.8rem; font-weight: bold; color: #E63946;">${activeOrders.length}</div>
+                            <div style="font-size: 0.8rem;">Active Orders</div>
+                        </div>
+                        <div style="text-align: center; padding: 0.8rem; background: white; border-radius: 12px;">
+                            <div style="font-size: 1.8rem; font-weight: bold; color: #E63946;">${formatPrice(totalRevenue)}</div>
+                            <div style="font-size: 0.8rem;">Total Revenue</div>
+                        </div>
+                        <div style="text-align: center; padding: 0.8rem; background: white; border-radius: 12px;">
+                            <div style="font-size: 1.8rem; font-weight: bold; color: #E63946;">${todayOrders.length}</div>
+                            <div style="font-size: 0.8rem;">Today's Orders</div>
+                        </div>
+                        <div style="text-align: center; padding: 0.8rem; background: white; border-radius: 12px;">
+                            <div style="font-size: 1.8rem; font-weight: bold; color: #E63946;">${formatPrice(todayRevenue)}</div>
+                            <div style="font-size: 0.8rem;">Today's Revenue</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 2rem; padding: 1rem; background: #F8F9FA; border-radius: 16px;">
+                    <h3>Orders by Status</h3>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
+                        <div><strong>Ordered:</strong> ${statusCounts[1]}</div>
+                        <div><strong>Preparing:</strong> ${statusCounts[2]}</div>
+                        <div><strong>Baking:</strong> ${statusCounts[3]}</div>
+                        <div><strong>Out for Delivery:</strong> ${statusCounts[4]}</div>
+                        <div><strong>Delivered:</strong> ${statusCounts[5]}</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 2rem; padding: 1rem; background: #F8F9FA; border-radius: 16px;">
+                    <h3>Most Popular Items</h3>
+                    ${popularItems.length > 0 ? popularItems.map(([name, count]) => `
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
+                            <span>${name}</span>
+                            <span style="font-weight: bold; color: #E63946;">${count} sold</span>
+                        </div>
+                    `).join('') : '<p>No orders yet</p>'}
+                </div>
+                
+                <button id="closeReportsBtn" style="background: #E63946; color: white; border: none; padding: 0.8rem; border-radius: 12px; cursor: pointer; width: 100%;">Close</button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        document.getElementById('closeReportsBtn').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+    }
+
+    // ============================================
+    // ANALYTICS MODAL
+    // ============================================
+    
     function showAnalyticsModal() {
         const allOrders = getAllOrdersForRevenue();
         const activeOrders = getAllOrders();
         
-        // Calculate revenue by month for the last 6 months
         const months = [];
         const revenueData = [];
         const orderCounts = [];
@@ -78,7 +389,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalOrders = allOrders.length;
         const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
         
-        // Create modal with full styling
         const modal = document.createElement('div');
         modal.className = 'analytics-modal';
         modal.style.cssText = `
@@ -139,7 +449,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         setTimeout(function() {
             const revenueCtx = document.getElementById('revenueChart');
-            if (revenueCtx) {
+            if (revenueCtx && typeof Chart !== 'undefined') {
                 new Chart(revenueCtx, {
                     type: 'bar',
                     data: {
@@ -165,7 +475,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const ordersCtx = document.getElementById('ordersChart');
-            if (ordersCtx) {
+            if (ordersCtx && typeof Chart !== 'undefined') {
                 new Chart(ordersCtx, {
                     type: 'line',
                     data: {
@@ -197,8 +507,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.target === modal) modal.remove();
         });
     }
+
+    // ============================================
+    // STAFF LIST
+    // ============================================
     
-    // Function to show staff list modal with full styling
     function showStaffList() {
         const users = initAppData().users;
         const staff = initStaffData();
@@ -208,7 +521,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         let staffHTML = '<div style="max-height: 500px; overflow-y: auto;">';
         
-        // CHEFS SECTION
+        // CHEFS
         staffHTML += `
             <div style="margin-bottom: 1.5rem;">
                 <h3 style="color: #E63946;"><i class="fas fa-utensils"></i> Chefs (${staff.chefs.length})</h3>
@@ -230,7 +543,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         
-        // CASHIERS SECTION
+        // CASHIERS
         staffHTML += `
             <div style="margin-bottom: 1.5rem;">
                 <h3 style="color: #F4A261;"><i class="fas fa-cash-register"></i> Cashiers (${staff.cashiers.length})</h3>
@@ -252,7 +565,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         
-        // DELIVERY DRIVERS SECTION
+        // DELIVERY DRIVERS
         staffHTML += `
             <div style="margin-bottom: 1.5rem;">
                 <h3 style="color: #118AB2;"><i class="fas fa-motorcycle"></i> Delivery Drivers (${staff.deliveryDrivers.length})</h3>
@@ -274,7 +587,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         
-        // ADMINISTRATORS SECTION
+        // ADMINISTRATORS
         staffHTML += `
             <div style="margin-bottom: 1.5rem;">
                 <h3 style="color: #6c5ce7;"><i class="fas fa-crown"></i> Administrators (${admins.length})</h3>
@@ -295,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         
-        // CUSTOMERS SECTION
+        // CUSTOMERS
         staffHTML += `
             <div style="margin-bottom: 1.5rem;">
                 <h3 style="color: #2A9D8F;"><i class="fas fa-users"></i> Customers (${customers.length})</h3>
@@ -329,142 +642,21 @@ document.addEventListener('DOMContentLoaded', function() {
             confirmText: 'Close'
         });
     }
+
+    // ============================================
+    // LOAD ORDERS
+    // ============================================
     
-    // Function to show modal
-    function showModal(options) {
-        const existingModal = document.querySelector('.modal-overlay');
-        if (existingModal) existingModal.remove();
-        
-        const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-        `;
-        
-        modal.innerHTML = `
-            <div style="background: white; border-radius: 25px; padding: 2rem; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto;">
-                ${options.type === 'confirm' ? '<i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: #E63946; margin-bottom: 1rem;"></i>' : '<i class="fas fa-users" style="font-size: 3rem; color: #E63946; margin-bottom: 1rem;"></i>'}
-                <h3 style="margin-bottom: 1rem;">${options.title}</h3>
-                <div style="color: #666; margin-bottom: 1.5rem;">${options.message}</div>
-                <div style="display: flex; gap: 1rem; justify-content: center;">
-                    ${options.showCancelButton ? '<button id="modalCancelBtn" style="background: #e0e0e0; color: #666; border: none; padding: 0.8rem 1.5rem; border-radius: 12px; cursor: pointer;">Cancel</button>' : ''}
-                    <button id="modalConfirmBtn" style="background: #E63946; color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 12px; cursor: pointer;">${options.confirmText || 'OK'}</button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        document.getElementById('modalConfirmBtn').addEventListener('click', () => {
-            modal.remove();
-            if (options.onConfirm) options.onConfirm();
-        });
-        
-        if (options.showCancelButton) {
-            const cancelBtn = document.getElementById('modalCancelBtn');
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', () => {
-                    modal.remove();
-                    if (options.onCancel) options.onCancel();
-                });
-            }
-        }
+    function getStatusText(statusCode) {
+        const statuses = { 1: 'Ordered', 2: 'Preparing', 3: 'Baking', 4: 'Out for Delivery', 5: 'Delivered' };
+        return statuses[statusCode] || 'Unknown';
     }
-    
-    // Function to show reports modal 
-    function showReportsModal() {
-        const allOrders = getAllOrdersForRevenue();
-        const activeOrders = getAllOrders();
-        const users = initAppData().users;
-        const today = new Date().toDateString();
-        
-        const todayOrders = allOrders.filter(order => new Date(order.timestamp).toDateString() === today);
-        const todayRevenue = todayOrders.reduce((sum, order) => sum + order.total, 0);
-        const totalRevenue = allOrders.reduce((sum, order) => sum + order.total, 0);
-        const totalCustomers = users.filter(u => u.type === 'customer').length;
-        
-        const statusCounts = {
-            1: allOrders.filter(o => o.status === 1 && !o.isDeleted).length,
-            2: allOrders.filter(o => o.status === 2 && !o.isDeleted).length,
-            3: allOrders.filter(o => o.status === 3 && !o.isDeleted).length,
-            4: allOrders.filter(o => o.status === 4 && !o.isDeleted).length,
-            5: allOrders.filter(o => o.status === 5 && !o.isDeleted).length
-        };
-        
-        const modal = document.createElement('div');
-        modal.className = 'reports-modal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10001;
-        `;
-        
-        modal.innerHTML = `
-            <div style="background: white; border-radius: 24px; padding: 2rem; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
-                <h2 style="color: #E63946; margin-bottom: 1rem;"><i class="fas fa-chart-line"></i> Sales Reports</h2>
-                
-                <div style="margin-bottom: 2rem; padding: 1rem; background: #F8F9FA; border-radius: 16px;">
-                    <h3>Summary</h3>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
-                        <div style="text-align: center; padding: 0.8rem; background: white; border-radius: 12px;">
-                            <div style="font-size: 1.8rem; font-weight: bold; color: #E63946;">${activeOrders.length}</div>
-                            <div style="font-size: 0.8rem;">Active Orders</div>
-                        </div>
-                        <div style="text-align: center; padding: 0.8rem; background: white; border-radius: 12px;">
-                            <div style="font-size: 1.8rem; font-weight: bold; color: #E63946;">${formatPrice(totalRevenue)}</div>
-                            <div style="font-size: 0.8rem;">Total Revenue</div>
-                        </div>
-                        <div style="text-align: center; padding: 0.8rem; background: white; border-radius: 12px;">
-                            <div style="font-size: 1.8rem; font-weight: bold; color: #E63946;">${todayOrders.length}</div>
-                            <div style="font-size: 0.8rem;">Today's Orders</div>
-                        </div>
-                        <div style="text-align: center; padding: 0.8rem; background: white; border-radius: 12px;">
-                            <div style="font-size: 1.8rem; font-weight: bold; color: #E63946;">${formatPrice(todayRevenue)}</div>
-                            <div style="font-size: 0.8rem;">Today's Revenue</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 2rem; padding: 1rem; background: #F8F9FA; border-radius: 16px;">
-                    <h3>Orders by Status</h3>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
-                        <div><strong>Ordered:</strong> ${statusCounts[1]}</div>
-                        <div><strong>Preparing:</strong> ${statusCounts[2]}</div>
-                        <div><strong>Baking:</strong> ${statusCounts[3]}</div>
-                        <div><strong>Out for Delivery:</strong> ${statusCounts[4]}</div>
-                        <div><strong>Delivered:</strong> ${statusCounts[5]}</div>
-                    </div>
-                </div>
-                
-                <button id="closeReportsBtn" style="background: #E63946; color: white; border: none; padding: 0.8rem; border-radius: 12px; cursor: pointer; width: 100%;">Close</button>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        document.getElementById('closeReportsBtn').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
-        });
+
+    function getStatusColor(status) {
+        const colors = { 1: '#6c5ce7', 2: '#fdcb6e', 3: '#e17055', 4: '#00b894', 5: '#0984e3' };
+        return colors[status] || '#6c5ce7';
     }
-    
-    // Load and display orders with full styling
+
     function loadOrders() {
         const activeOrders = getAllOrders();
         const allOrdersForRevenue = getAllOrdersForRevenue();
@@ -496,7 +688,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         let ordersHTML = '';
         activeOrders.slice().reverse().forEach(order => {
-            const statusClass = getStatusClass(order.status);
             const statusText = getStatusText(order.status);
             const orderDate = new Date(order.timestamp).toLocaleString();
             const showDeleteButton = order.status === 5;
@@ -520,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <strong>Items:</strong> ${order.items.map(item => `${item.quantity}x ${item.name}`).join(', ')}
                     </div>
                     <div class="order-status-badge" style="margin: 0.5rem 0;">
-                        <span class="status status-${statusClass}" style="display: inline-block; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: ${getStatusColor(order.status)}; color: white;">${statusText}</span>
+                        <span class="status status-${getStatusText(order.status).toLowerCase()}" style="display: inline-block; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: ${getStatusColor(order.status)}; color: white;">${statusText}</span>
                     </div>
                     <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                         <button class="btn-update" data-order="${order.id}" style="background: linear-gradient(135deg, #6a11cb, #2575fc); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer;">
@@ -549,16 +740,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 confirmDeleteOrder(orderId);
             });
         });
-    }
-    
-    function getStatusColor(status) {
-        const colors = { 1: '#6c5ce7', 2: '#fdcb6e', 3: '#e17055', 4: '#00b894', 5: '#0984e3' };
-        return colors[status] || '#6c5ce7';
-    }
-    
-    function getStatusClass(status) {
-        const classes = { 1: 'ordered', 2: 'preparing', 3: 'baking', 4: 'delivering', 5: 'delivered' };
-        return classes[status] || 'ordered';
     }
     
     function confirmDeleteOrder(orderId) {
@@ -613,12 +794,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else if (statusNum === order.status) {
                 alert('Order is already at this status.');
+            } else {
+                alert('Please enter a valid number between 1 and 5.');
             }
         }
     }
     
-    // Initialize
+    // ============================================
+    // INITIALIZE
+    // ============================================
+    
     initStaffData();
+    
+    // Load toppings and menu items for admin
+    loadToppings();
+    loadMenuItemsForAdmin();
     
     // Event listeners
     document.getElementById('navReports')?.addEventListener('click', (e) => { e.preventDefault(); showReportsModal(); });
